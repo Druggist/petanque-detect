@@ -1,5 +1,5 @@
 import argparse
-import numpy as np
+import math
 import cv2
 import imutils
 
@@ -8,6 +8,14 @@ def draw_marker(frame, x, y, radius):
     cv2.circle(frame, (int(x), int(y)), int(radius),
                (0, 255, 255), 2)
     cv2.circle(frame, (int(x), int(y)), 5, (0, 0, 255), -1)
+
+
+def draw_dist(frame, x, y, x2, y2):
+    cv2.line(frame, (int(x), int(y)), (int(x2), int(y2)), (255, 0, 0), thickness=2)
+    dist = math.hypot(x2 - x, y2 - y)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(frame, str(round(dist,2)), (int((x + x2) / 2), int((y + y2) / 2)), font, 2, (255, 255, 255), 3, cv2.LINE_AA)
+    cv2.text
 
 
 def get_jack(frame):
@@ -64,6 +72,7 @@ def main(args):
             for b in boules:
                 if b[1] > radius * 2:
                     draw_marker(frame, b[0][0], b[0][1], b[1])
+                    draw_dist(frame, b[0][0], b[0][1], x, y)
 
         frame = imutils.resize(frame, width=600)
         cv2.imshow("frame", frame)
