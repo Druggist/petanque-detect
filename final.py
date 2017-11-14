@@ -5,20 +5,40 @@ import cv2
 import imutils
 
 
-	# (1, 220, 83), (10, 255, 170)
-	# (1, 0, 30), (80, 255, 100)
-JACK_COLOR = np.array([6,237,136])
-BOULE_COLOR = np.array([5,17,70])
-DEVIATION = np.array([4, 17, 44])
+JACK_COLOR = [np.array([1, 220, 83]), np.array([10, 255, 170])]
+BOULE_COLOR = [np.array([1, 0, 30]), np.array([80, 255, 100])]
+DEVIATION = np.array([0, 0, 0])
+REF_PT = []
+CROPPING = False
 
-def get_colors(event, x, y, flags, frame):
-	global JACK_COLOR, BOULE_COLOR
-	if event == cv2.EVENT_LBUTTONDBLCLK:
-		JACK_COLOR = np.array(cv2.cvtColor(np.uint8([[frame[x,y]]]), cv2.COLOR_BGR2HSV)[0][0])
-		print("j: {0}".format(JACK_COLOR))
-	elif event == cv2.EVENT_RBUTTONDBLCLK: 
-		BOULE_COLOR = np.array(cv2.cvtColor(np.uint8([[frame[x,y]]]), cv2.COLOR_BGR2HSV)[0][0])
-		print("b: {0}".format(BOULE_COLOR))
+
+# def get_colors(event, x, y, flags, frame):
+# 	global JACK_COLOR, BOULE_COLOR
+# 	if event == cv2.EVENT_LBUTTONDBLCLK:
+# 		JACK_COLOR = np.array(cv2.cvtColor(np.uint8([[frame[x,y]]]), cv2.COLOR_BGR2HSV)[0][0])
+# 		print("j: {0}".format(JACK_COLOR))
+# 	elif event == cv2.EVENT_RBUTTONDBLCLK: 
+# 		BOULE_COLOR = np.array(cv2.cvtColor(np.uint8([[frame[x,y]]]), cv2.COLOR_BGR2HSV)[0][0])
+# 		print("b: {0}".format(BOULE_COLOR))
+def select_area(event, x, y, flags, param):
+	global REF_PT, CROPPING
+
+	if event == cv2.EVENT_LBUTTONDOWN:
+		REF_PT = [(x, y), (x, y)]
+		CROPPING = True
+
+	elif CROPPING and event == cv2.EVENT_MOUSEMOVE:
+		REF_PT[1] = (x, y)
+
+	elif event == cv2.EVENT_LBUTTONUP:
+		REF_PT[1] = (x, y)
+		CROPPING = False
+
+def get_colors(data):
+	# TODO COLOR FROM DATA
+	return [np.array([1, 0, 30]), np.array([80, 255, 100])]
+
+
 
 def draw_marker(frame, x, y, radius):
 	cv2.circle(frame, (int(x), int(y)), int(radius), (0, 255, 255), 2)
@@ -38,8 +58,7 @@ def get_jack(frame):
 
 	blurred = cv2.GaussianBlur(frame, (11, 11), 0)
 	hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-	mask = cv2.inRange(hsv, np.clip(JACK_COLOR - DEVIATION, 0, 255), np.clip(JACK_COLOR + DEVIATION, 0, 255))
-	#mask = cv2.inRange(hsv, (1, 220, 83), (10, 255, 170))
+	mask = cv2.inRange(hsv, np.clip(JACK_COLOR[0] - DEVIATION, 0, 255), np.clip(JACK_COLOR[1] + DEVIATION, 0, 255))
 	mask = cv2.erode(mask, None, iterations=2)
 	mask = cv2.dilate(mask, None, iterations=2)
 	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
@@ -55,9 +74,7 @@ def get_boules(frame):
 
 	blurred = cv2.GaussianBlur(frame, (11, 11), 0)
 	hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-
-	#mask = cv2.inRange(hsv, (1, 0, 30), (80, 255, 100))
-	mask = cv2.inRange(hsv, np.clip(BOULE_COLOR - DEVIATION, 0, 255), np.clip(BOULE_COLOR + DEVIATION, 0, 255))
+	mask = cv2.inRange(hsv, np.clip(BOULE_COLOR[0] - DEVIATION, 0, 255), np.clip(BOULE_COLOR[1] + DEVIATION, 0, 255))
 	mask = cv2.erode(mask, None, iterations=2)
 	mask = cv2.dilate(mask, None, iterations=2)
 	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
@@ -73,59 +90,66 @@ def get_boules(frame):
 
 
 def main(args):
+	global REF_PT, JACK_COLOR, BOULE_COLOR, CROPPING
+
 	if not args.get("video", False):
 		camera = cv2.VideoCapture(0)
 
 	else:
 		camera = cv2.VideoCapture(args["video"])
 
-	global JACK_COLOR, BOULE_COLOR
-
+		(grabbed, frame) = (False, [])
+		Config = False
 	while True:
-		(grabbed, frame) = camera.read()
 		if args.get("video") and not grabbed:
 			camera = cv2.VideoCapture(args["video"])
+			(grabbed, frame) = camera.read()
 			continue
+		
+		frame_tmp = frame.copy()
 
-		((x, y), radius) = get_jack(frame)
-		draw_marker(frame, x, y, radius)
-		boules = get_boules(frame)
-		if boules is not None:
-			for b in boules:
-				if b[1] > radius * 2:
-					draw_marker(frame, b[0][0], b[0][1], b[1])
-					draw_dist(frame, b[0][0], b[0][1], x, y)
+		if not Config:
+			((x, y), radius) = get_jack(frame_tmp)
+			draw_marker(frame_tmp, x, y, radius)
+			boules = get_boules(frame_tmp)
+			if boules is not None:
+				for b in boules:
+					if b[1] > radius * 2:
+						draw_marker(frame_tmp, b[0][0], b[0][1], b[1])
+						draw_dist(frame_tmp, b[0][0], b[0][1], x, y)
+			(grabbed, frame) = camera.read()
+		elif (not CROPPING) and (len(REF_PT) == 2):
+			if len(JACK_COLOR) == 0:
+				JACK_COLOR = get_colors(frame[REF_PT[0][1]:REF_PT[1][1], REF_PT[0][0]:REF_PT[1][0]])
+				REF_PT = []
+			else:
+				BOULE_COLOR = get_colors(frame[REF_PT[0][1]:REF_PT[1][1], REF_PT[0][0]:REF_PT[1][0]])
+				Config = False
+				REF_PT = []
 
-		cv2.setMouseCallback('frame',get_colors, frame)
-		frame = imutils.resize(frame, width=800)
-		cv2.imshow("frame", frame)
+		frame_tmp = imutils.resize(frame_tmp, width=800)
+		cv2.setMouseCallback("frame", select_area)
+		if len(REF_PT) == 2:
+			cv2.rectangle(frame_tmp, REF_PT[0], REF_PT[1], (0, 255, 0), 2)
+		cv2.imshow("frame", frame_tmp)
 
+	
 		key = cv2.waitKey(1) & 0xFF
-
 		if key == ord("q"):
 			break
+		elif key == ord("c") or args["config"]:
+			args["config"] = False
+			Config = True
+			JACK_COLOR = []
+			BOULE_COLOR = []
 
 	camera.release()
 	cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-	ap = argparse.ArgumentParser()
+	ap = argparse.ArgumentParser(description="")
 	ap.add_argument("-v", "--video", help="path to the (optional) video file")
+	ap.add_argument("-c", "--config", action='store_true', help="enter color configuration on startup")
 	args = vars(ap.parse_args())
-
-	#
-	# def nothing(x):
-	#     pass
-	#
-
-	# cv2.namedWindow('image')
-	#
-	# cv2.createTrackbar('lowH', 'image', 0, 255, nothing)
-	# cv2.createTrackbar('uppH', 'image', 255, 255, nothing)
-	# cv2.createTrackbar('lowS', 'image', 0, 255, nothing)
-	# cv2.createTrackbar('uppS', 'image', 255, 255, nothing)
-	# cv2.createTrackbar('lowV', 'image', 0, 255, nothing)
-	# cv2.createTrackbar('uppV', 'image', 255, 255, nothing)
-
 	main(args)
