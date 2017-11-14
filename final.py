@@ -35,8 +35,10 @@ def select_area(event, x, y, flags, param):
 		CROPPING = False
 
 def get_colors(data):
-	# TODO COLOR FROM DATA
-	return [np.array([1, 0, 30]), np.array([80, 255, 100])]
+	data = cv2.cvtColor(data, cv2.COLOR_BGR2HSV)
+	min_c = np.array([data[:,:,0].min(), data[:,:,1].min(), data[:,:,2].min()])
+	max_c = np.array([data[:,:,0].max(), data[:,:,1].max(), data[:,:,2].max()])
+	return [min_c, max_c]
 
 
 
@@ -119,6 +121,7 @@ def main(args):
 						draw_dist(frame_tmp, b[0][0], b[0][1], x, y)
 			(grabbed, frame) = camera.read()
 		elif (not CROPPING) and (len(REF_PT) == 2):
+			frame = imutils.resize(frame, width=800)
 			if len(JACK_COLOR) == 0:
 				JACK_COLOR = get_colors(frame[REF_PT[0][1]:REF_PT[1][1], REF_PT[0][0]:REF_PT[1][0]])
 				REF_PT = []
