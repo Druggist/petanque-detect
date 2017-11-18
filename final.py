@@ -3,6 +3,7 @@ import math
 import numpy as np
 import cv2
 import imutils
+import urllib
 
 JACK_COLOR = [np.array([1, 220, 83]), np.array([10, 255, 170])]
 BOULE_COLOR = [np.array([1, 0, 30]), np.array([80, 255, 100])]
@@ -93,14 +94,22 @@ def get_boules(frame):
                 boules.append(cv2.minEnclosingCircle(c))
     return boules
 
+class UrlCam:
+    def read(self):
+        url = urllib.request.urlopen(args['url'])
+        imgNp = np.array(bytearray(url.read()), dtype=np.uint8)
+        frame = cv2.imdecode(imgNp, -1)
+        return True, frame
 
 def main(args):
     global REF_PT, JACK_COLOR, BOULE_COLOR, CROPPING
 
-    if not args.get("video", False):
-        camera = cv2.VideoCapture(0)
-    else:
+    if args.get("video"):
         camera = cv2.VideoCapture(args["video"])
+    elif args.get("url"):
+        camera = UrlCam()
+    else:
+        camera = cv2.VideoCapture(0)
 
     if args["config"]:
         state = 0  # 0 - config, 1 - work
@@ -108,6 +117,7 @@ def main(args):
         state = 1
 
     (grabbed, frame) = camera.read()
+
     while True:
         frame = imutils.resize(frame, width=800)
         frame_tmp = frame.copy()
@@ -162,5 +172,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="")
     ap.add_argument("-v", "--video", help="path to the (optional) video file")
     ap.add_argument("-c", "--config", action='store_true', help="enter color configuration on startup")
+    ap.add_argument("-u", "--url", help="url to image file")
     args = vars(ap.parse_args())
     main(args)
